@@ -1,0 +1,87 @@
+server {
+    listen 80 default_server;
+    server_name main.gigasoft.com.pl;
+    location ~ ^/\.well-known {
+        root /var/www/html;
+    }
+    location / {
+        rewrite ^ https://$host$request_uri? permanent;
+    }
+}
+
+server {
+    listen 443 ssl http2 default_server;
+    root /var/www/html;
+    index index.html index.htm index.nginx-debian.html index.php;
+    server_name main.gigasoft.com.pl;
+    ssl_certificate_key /etc/letsencrypt/live/main.gigasoft.com.pl/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/main.gigasoft.com.pl/fullchain.pem;
+
+    location /AI/ {
+        rewrite /AI/(.*) /$1 break;
+        proxy_pass http://localhost:3000;
+        proxy_redirect ^(/AI/*) $1;
+        proxy_redirect / /AI/;
+    }
+
+    location = /AI {
+        rewrite ^ /AI/ last;
+    }
+
+    location /api {
+        if ($request_method = 'OPTIONS') {
+            add_header 'Access-Control-Allow-Origin' 'http://localhost:3000';
+            add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
+            add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization';
+            add_header 'Access-Control-Max-Age' 1728000;
+            add_header 'Content-Type' 'text/plain; charset=utf-8';
+            add_header 'Content-Length' 0;
+            return 204;
+        }
+
+        proxy_pass http://localhost:3000;
+    }
+
+    location /_next/static {
+        proxy_pass http://localhost:3000;
+    }
+
+    location /_next {
+        proxy_pass http://localhost:3000;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 86400;
+    }
+
+    location /phpmyadmin {
+        root /usr/share;
+        index index.php;
+        try_files $uri $uri/ =404;
+    }
+
+    location / {
+        index index.php;
+    }
+
+    location ~ ^/phpmyadmin/(.+\.php)$ {
+        root /usr/share;
+        fastcgi_pass unix:/run/php/php8.2-fpm.sock;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php8.2-fpm.sock;
+    }
+
+    location ~ /\.ht {
+        deny all;
+    }
+}

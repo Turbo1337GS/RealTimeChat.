@@ -1,0 +1,91 @@
+import { gql, useMutation } from "@apollo/client";
+import { useSession } from "next-auth/react";
+import { useState } from "react";
+import useSound from "use-sound";
+import { RiImageAddFill } from "react-icons/ri";
+
+const AddNewMessageMutation = gql`
+  mutation AddNewMessage($username: String!, $avatar: URL, $body: String!) {
+    messageCreate(
+      input: { username: $username, avatar: $avatar, body: $body }
+    ) {
+      message {
+        id
+      }
+    }
+  }
+`;
+
+export const NewMessageForm = (): JSX.Element => {
+  const { data: session } = useSession();
+  const [play] = useSound("sent.wav");
+  const [body, setBody] = useState<string>("");
+  const [image, setImage] = useState<string | null>(null);
+  const [addNewMessage] = useMutation(AddNewMessageMutation, {
+    onCompleted: () => play(),
+  });
+
+  const handleSend = (e: React.FormEvent<HTMLFormElement>): void => {
+    e.preventDefault();
+
+    if (body) {
+      const messageBody = image ? `${body} <img src="${image}" alt="Selected Image" />` : body;
+      addNewMessage({
+        variables: { username: session?.username ?? "", avatar: session?.user?.image, body: messageBody },
+      });
+      setBody("");
+      setImage(null);
+    }
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (reader.result) {
+          setImage(reader.result as string);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSend} className="flex items-start space-x-3">
+      <input
+        autoFocus
+        id="message"
+        name="message"
+        autoComplete="off"
+        placeholder="Write a message..."
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        className="flex-1 h-12 px-3 rounded bg-[#222226] border border-[#222226] focus:border-[#222226] focus:outline-none text-white placeholder-white"
+      />
+      <label htmlFor="image" className="text-white cursor-pointer">
+        <RiImageAddFill size={24} />
+        <input
+          type="file"
+          id="image"
+          name="image"
+          accept="image/*"
+          onChange={handleImageChange}
+          style={{ display: "none" }}
+        />
+      </label>
+      <button
+        type="submit"
+        className="bg-[#222226] rounded h-12 font-medium text-white w-24 text-lg border border-transparent hover:bg-[#363739] transition"
+        disabled={!body || !session}
+      >
+        Send
+      </button>
+      {image && (
+        <div>
+          <img src={image} alt="Selected Image" />
+        </div>
+      )}
+    </form>
+  );
+};
